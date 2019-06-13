@@ -74,5 +74,21 @@ void intraop_launch(std::function<void()> func) {
   tg_.run(func);
 }
 
+std::future<void> intraop_launch_future(std::function<void()> func) {
+  std::promise<void> func_promise;
+  auto future = func_promise.get_future();
+  tg_.run(
+    std::bind(
+      [](std::promise<void>&& fp, std::function<void()>&& f) {
+        f();
+        fp.set_value();
+      },
+      std::move(func_promise),
+      std::move(func)
+    )
+  );
+  return future;
+}
+
 } // namespace at
 #endif
