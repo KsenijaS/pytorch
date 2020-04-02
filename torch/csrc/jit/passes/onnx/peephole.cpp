@@ -849,7 +849,7 @@ static void fuseLogSoftmaxNllLoss(Block* b) {
 */
 
  void recursive_del(Node* node) {
-  printf("%s \n", node->kind().toQualString());
+  //printf("%s \n", node->kind().toQualString());
   if (node->kind() == onnx::LogSoftmax) {
     return;
   }

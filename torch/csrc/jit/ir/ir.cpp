@@ -1209,7 +1209,7 @@ void Node::cloneFrom(Node* s) {
 }
 
 void Node::replaceAllUsesWith(Node* n) {
-  AT_ASSERT(outputs().size() == n->outputs().size());
+  //AT_ASSERT(outputs().size() == n->outputs().size());
   size_t nOutputs = outputs().size();
   for (size_t i = 0; i < nOutputs; i++) {
     outputs()[i]->replaceAllUsesWith(n->outputs()[i]);
