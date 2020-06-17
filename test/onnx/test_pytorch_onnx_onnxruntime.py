@@ -110,7 +110,7 @@ class TestONNXRuntime(unittest.TestCase):
         np.random.seed(seed=0)
         self.is_script_test_enabled = False
 
-    def run_test(self, model, input, rtol=1e-3, atol=1e-7, do_constant_folding=True,
+    def run_test(self, model, input, rtol=1e-2, atol=1e-5, do_constant_folding=True,
                  batch_size=2, use_gpu=True, dynamic_axes=None, test_with_inputs=None,
                  input_names=None, output_names=None, fixed_batch_size=False):
         def _run_test(m):
@@ -125,7 +125,7 @@ class TestONNXRuntime(unittest.TestCase):
             _run_test(script_model)
         _run_test(model)
 
-    def run_model_test_with_external_data(self, model, input, rtol=0.001, atol=1e-7,
+    def run_model_test_with_external_data(self, model, input, rtol=0.01, atol=1e-5,
                                           example_outputs=None, do_constant_folding=True,
                                           dynamic_axes=None, input_names=None, output_names=None,
                                           ort_optim_on=True):
@@ -196,6 +196,21 @@ class TestONNXRuntime(unittest.TestCase):
         # Once that support is added, we can set ort_optim_on=True (default).
         self.run_model_test_with_external_data(model, x, rtol=1e-3, atol=1e-5,
                                                ort_optim_on=False)
+
+
+    def test_bn_conv(self):
+        class Fuse(torch.nn.Module):
+            def __init__(self):
+                super(Fuse, self).__init__()
+                self.conv = torch.nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,bias=False)
+                self.bn = torch.nn.BatchNorm2d(64)
+            def forward(self, x):
+                out = self.conv(x)
+                return self.bn(out)
+        
+        model = Fuse()
+        x = torch.randn(2, 3, 224, 224, requires_grad=True)
+        self.run_test(model, (x,))
 
     # Export Torchvision models
 

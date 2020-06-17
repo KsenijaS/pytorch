@@ -68,6 +68,8 @@ static void fuseConvBachNorm(Block* b, ValueToParamPairMap& valsToParamsMap) {
       bn_mean.mul(bn_scale);
       bn_B.sub(bn_mean);
 
+      printf("=========================== bn_B =========================== %lu \n", bn_B.dim());
+
       Node* convNode = b->owningGraph()->create(onnx::Conv, bnNode->outputs().size());
       for (size_t i = 0; i < convNode->outputs().size(); ++i) {
         convNode->outputs()[i]->copyMetadata(bnNode->outputs()[i]);
@@ -83,14 +85,15 @@ static void fuseConvBachNorm(Block* b, ValueToParamPairMap& valsToParamsMap) {
       convNode->addInput(conv_W);
       
       auto conv_B = b->addInput();
-      valsToParamsMap.insert({conv_B, std::make_pair(conv_W->debugName(), bn_B)});
-      conv_W->inferTypeFrom(bn_B);
+      valsToParamsMap.insert({conv_B, std::make_pair(conv_B->debugName(), bn_B)});
+      conv_B->inferTypeFrom(bn_B);
       convNode->addInput(conv_B);
 
       bnNode->replaceAllUsesWith(convNode);
       bnNode->removeAllInputs();
       //origconvNode->destroy();
-      //bnNode->destroy();
+      bnNode->destroy();
+      //origconvNode->destroy();
 
       //auto s = w_conv.size(0);
       //w_conv.flatten(0, 1);
@@ -120,7 +123,7 @@ static void fuseConvBachNorm(Block* b, ValueToParamPairMap& valsToParamsMap) {
 
 void EliminateUnusedItemsONNX(Block* b, ParamMap& paramsDict) {
   auto valsToParamsMap = buildValueToParamsMap(b, paramsDict);
-  //fuseConvBachNorm(b, valsToParamsMap);
+  fuseConvBachNorm(b, valsToParamsMap);
   eraseUnusedValuesFromMap(valsToParamsMap);
   eraseUnusedBlockInputs(b);
   buildParamsMapFromValueToParamsMap(valsToParamsMap, paramsDict);
