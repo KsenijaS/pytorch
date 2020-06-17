@@ -91,7 +91,7 @@ static void fuseConvBachNorm(Block* b, ValueToParamPairMap& valsToParamsMap) {
 
       bnNode->replaceAllUsesWith(convNode);
       bnNode->removeAllInputs();
-      //origconvNode->destroy();
+      origconvNode->removeAllInputs();
       bnNode->destroy();
       //origconvNode->destroy();
 
@@ -123,6 +123,7 @@ static void fuseConvBachNorm(Block* b, ValueToParamPairMap& valsToParamsMap) {
 
 void EliminateUnusedItemsONNX(Block* b, ParamMap& paramsDict) {
   auto valsToParamsMap = buildValueToParamsMap(b, paramsDict);
+  printf("===================FUSE==============\n");
   fuseConvBachNorm(b, valsToParamsMap);
   eraseUnusedValuesFromMap(valsToParamsMap);
   eraseUnusedBlockInputs(b);

@@ -207,9 +207,11 @@ class TestONNXRuntime(unittest.TestCase):
             def forward(self, x):
                 out = self.conv(x)
                 return self.bn(out)
-        
+
+        print("RUN TEST")
         model = Fuse()
         x = torch.randn(2, 3, 224, 224, requires_grad=True)
+        print("RUN TEST")
         self.run_test(model, (x,))
 
     # Export Torchvision models
