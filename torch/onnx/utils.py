@@ -404,12 +404,12 @@ def _model_to_graph(model, args, verbose=False,
     param_names = input_and_param_names[len(input_and_param_names) - len(params):]
     params_dict = dict(zip(param_names, params))
 
+    params_dict = torch._C._jit_pass_onnx_fuse_bn_conv(graph, params_dict)
     if do_constant_folding and _export_onnx_opset_version in torch.onnx.constant_folding_opset_versions:
         params_dict = torch._C._jit_pass_onnx_constant_fold(graph, params_dict,
                                                             _export_onnx_opset_version)
         torch._C._jit_pass_dce_allow_deleting_nodes_with_side_effects(graph)
 
-    params_dict = torch._C._jit_pass_onnx_eliminate_unused_items(graph, params_dict)
 
     # For ONNX opset < 9, constants only have three data types: float16, float, double.
     # In this pass transform constants of other data types to float/double + cast operator.
