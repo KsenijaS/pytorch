@@ -226,14 +226,141 @@ std::vector<Value*> FixupONNXLoopNode(Node* node, int opset_version) {
   return new_outputs;
 }
 
+TypePtr FindType(Node* node, int position) {
+  auto* if_node = node;
+  auto* graph = if_node->owningGraph();
+  TypePtr return_type = NULL;
+
+  //std::cout << "graph output: " << *graph << "\n";
+  auto n = node->blocks().size();
+  std::cout << "Number of blocks: " << n << "\n";
+  for (Block* block : node->blocks()) {
+    auto block_node = block->outputs()[position]->node();
+    if (block_node->kind() != prim::Uninitialized) {
+      return_type = block->outputs()[position]->type();
+      auto vartype = return_type->expect<TensorType>()->scalarType();
+      auto type1 = block->outputs()[1]->type()->expect<TensorType>()->scalarType();
+      auto type2 = block->outputs()[2]->type()->expect<TensorType>()->scalarType();
+      std::cout << "Return type: " << *type1 << "type 2 " << *type2 << "\n";
+      // if (*vartype != c10::kByte) {
+      //   break;
+      //}
+    }
+  }
+
+  return return_type;
+}
+
 std::vector<Value*> FixupONNXIfNode(Node* node, int opset_version) {
   if (node->kind() != ::c10::onnx::If) {
     return node->outputs().vec();
   }
   GRAPH_DUMP("Graph before fixing controlflow: ", node->owningGraph());
   auto* if_node = node;
+  auto if_type = if_node->input()->type()->expect<TensorType>()->scalarType();
+  auto if_outs = if_node->outputs();
+ 
+  // cast If node input to Bool
   auto* graph = if_node->owningGraph();
+   if (*if_type == c10::kLong) {
+    Node* cast_node = graph->create(onnx::Cast);
+    cast_node->i_(attr::to, 9);
+    cast_node->insertBefore(if_node);
+    cast_node->addInput(if_node->input());
+    cast_node->output()->setType(TensorType::fromNumberType(BoolType::get()));
+    if_node->removeAllInputs();
+    if_node->addInput(cast_node->output());
+  }
+
   for (Block* block : node->blocks()) {
+    // my code
+    
+    // Replace prim::Uninitialized with onnx::Constant
+    // for (auto i = 0; i < block->outputs().size(); i++) {
+    //   auto curr_node = block->outputs()[i]->node();
+    //   auto output = block->outputs()[i];
+    //   if (curr_node->kind() == prim::Uninitialized) {
+    //     auto unint_type= curr_node->output()->type()->expect<TensorType>()->scalarType();
+    //     std::cout << " !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! UNINIT TYPE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!   " << *unint_type << "\n";
+    //     Node* const_node = graph->create(onnx::Constant, 1);
+    //     const_node->insertBefore(block->return_node());
+    //     //auto node_type = FindType(if_node, i);
+    //     //auto val_type = node_type->expect<TensorType>()->scalarType();
+    //     auto val = at::scalar_to_tensor(at::Scalar(i));
+    //     //auto new_val = val.to(*val_type);
+    //     const_node->t_(attr::value, val);
+    //     //const_node->output()->setType(node_type);
+    //     block->return_node()->replaceInputWith(output, const_node->output());
+    //   }
+    // }
+    std::vector<int> mylist;
+    auto nested_if = if_node->owningBlock()->owningNode();
+    for (auto i = 0; i < block->outputs().size(); i++) {
+      auto output = block->outputs()[i];
+      auto found = false;
+      for (auto n: block->nodes()) {
+        if (output == n->outputs()[0]) {
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        mylist.push_back(i);
+      }
+    }
+    for (auto l : mylist) {
+      //if (l != 0) {
+      Value* output = block->outputs()[l];
+      Node* id_node;
+      id_node = graph->create(onnx::Identity);
+      id_node->insertBefore(block->return_node());
+      id_node->addInput(output);
+      id_node->output()->copyMetadata(output);
+      auto if_type = if_node->outputs()[l]->type()->expect<TensorType>()->scalarType();
+      block->return_node()->replaceInputWith(output, id_node->output());
+     // }
+    }
+
+    // if (block->outputs().size() == 3) {
+    //   auto t1 = block->outputs()[1]->type()->expect<TensorType>()->scalarType();
+    //   auto t2 = block->outputs()[2]->type()->expect<TensorType>()->scalarType();
+    //   //if (*t1 != *t2) {
+    //   for (auto k = 1; k < 3; k++) {
+    //     Value* output;
+    //     //if (*t1 != c10::kByte) {
+    //       //printf("=========================KLONG====================== \n");
+    //     output = block->outputs()[k];
+    //     //k = 2;
+    //     //} else {
+    //       //output = block->outputs()[2];
+    //       //k = 1;
+    //     //}
+    //     Node* cast_node = graph->create(onnx::Cast);
+    //     cast_node->i_(attr::to, 2);
+    //     cast_node->insertBefore(block->return_node());
+    //     cast_node->addInput(output);
+    //     auto if_node_type = if_node->outputs()[k]->type()->expect<TensorType>()->scalarType();
+    //     std::cout << "Print IF NODE output type: " << *if_node_type << "\n";
+    //     cast_node->output()->setType(if_node->outputs()[k]->type());
+    //     block->return_node()->replaceInputWith(output, cast_node->output());
+    //   //}
+    //   }
+    //   std::cout << "Outputs type " << *t1 << " : " << *t2 << "\n";
+      // if (*t1 != *t2) {
+      //   if 
+      // }
+    //}
+    // if (block->outputs().size() > 1) {
+    //   Value* output = block->outputs()[0];
+    //   Node* cast_node = graph->create(onnx::Cast);
+    //   cast_node->i_(attr::to, 9);
+    //   cast_node->insertBefore(block->return_node());
+    //   cast_node->addInput(output);
+    //   //cast_node->output()->copyMetadata(output);
+    //   cast_node->output()->setType(TensorType::fromNumberType(BoolType::get()));
+    //   block->return_node()->replaceInputWith(output, cast_node->output());
+    //}
+    // end of my code
     if (block->nodes().begin() == block->nodes().end()) {
       // ONNX does not support empty blocks, must use some op which does
       // nothing
@@ -243,7 +370,7 @@ std::vector<Value*> FixupONNXIfNode(Node* node, int opset_version) {
       id_node->addInput(output);
       id_node->output()->copyMetadata(output);
       block->return_node()->replaceInputWith(output, id_node->output());
-    }
+    }    
   }
   GRAPH_DUMP("Graph after fixing controlflow: ", node->owningGraph());
   return if_node->outputs().vec();

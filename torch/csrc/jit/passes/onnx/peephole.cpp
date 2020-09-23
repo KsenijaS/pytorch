@@ -821,6 +821,29 @@ static void removeSequenceSplitConcat(Block* b) {
   }
 }
 
+static void findUninitialized(Block* b) {
+  for (auto it = b->nodes().begin(), end = b->nodes().end(); it != end; ++it) {
+    for (auto* child_block : it->blocks()) {
+      findUninitialized(child_block);
+    }
+    if (it->kind() == onnx::If) {
+      for (Block* block : it->blocks()) {
+        for (auto i = 0; i < block->outputs().size(); i++) {
+          std::cout << "+++++++++++++ index i +++++++++++++++++++" << i << "\n";
+          printf("+++++++++++++++output i+++++++++++++++++++ \n");
+          auto curr_node = block->outputs()[i]->node();
+          printf("+++++++++++++++++++++ output type +++++++++++++++++++ \n");
+          if (curr_node->kind() == prim::Uninitialized) {
+            printf("++++++++++++++++++++ Uninitialized ++++++++++++++++ \n");
+          }
+          auto unint_type= curr_node->output()->type()->expect<TensorType>()->scalarType();
+          std::cout << " !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PEEPHOLE UNINIT TYPE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!   " << *unint_type << "\n";
+        }
+      }
+    }
+  }
+}
+
 // This optimization does ONNX-specific peephole optimizations.
 //
 // At the moment, here are the optimizations it does:
@@ -864,6 +887,7 @@ void PeepholeOptimizeONNX(
   eraseListConstruct(graph->block(), opset_version);
   removeMaxPoolUnusedOutput(graph->block());
   removeSequenceSplitConcat(graph->block());
+  findUninitialized(graph->block());
 }
 
 } // namespace jit

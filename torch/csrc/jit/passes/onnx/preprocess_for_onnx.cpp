@@ -158,11 +158,41 @@ static void ReplaceAddWithConcat(Block* b) {
   }
 }
 
+// int FindPosition(Block *b, Node* node) {
+//   for (auto it = b->nodes().begin(), end = b->nodes().end(); it != end; ++it) {
+//     for (auto* child_block : it->blocks()) {
+//       FindPosition(child_block, node);
+//     }
+
+
+//   }
+//   return 0;
+// }
+static void ReplaceUninitialized(Block* b) {
+  for (auto it = b->nodes().begin(), end = b->nodes().end(); it != end; ++it) {
+    for (auto* child_block : it->blocks()) {
+      ReplaceUninitialized(child_block);
+    }
+
+    if (it->kind() == prim::Uninitialized) {
+      Node* const_node = b->owningGraph()->create(onnx::Constant, 1);
+      const_node->insertBefore(*it);
+      const_node->t_(attr::value, at::scalar_to_tensor(at::Scalar(1.0)));
+      const_node->output()->copyMetadata(it->output());
+      //const_node->output()->setType(it->output()->type());
+      //const_node->outputs()[0]->setType(TensorType::fromNumberType(FloatType::get()));
+      it->replaceAllUsesWith(const_node);
+      it.destroyCurrent();
+    }
+  }
+}
+
 } // namespace
 
 void PreprocessForONNX(std::shared_ptr<Graph>& graph) {
   FuseWithListUnpack(graph->block());
   ReplaceAddWithConcat(graph->block());
+  //ReplaceUninitialized(graph->block());
 }
 
 } // namespace jit

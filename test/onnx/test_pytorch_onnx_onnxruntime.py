@@ -24,6 +24,11 @@ import model_defs.word_language_model as word_language_model
 import torchvision
 import onnx
 
+def export_to_pbtxt(model, inputs, *args, **kwargs):
+    return torch.onnx.export_to_pretty_string(
+        model, inputs, None, verbose=False, google_printer=True,
+        *args, **kwargs)
+
 def to_numpy(tensor):
     if tensor.requires_grad:
         return tensor.detach().cpu().numpy()
@@ -39,6 +44,7 @@ def convert_to_onnx(model, input=None, opset_version=9, example_outputs=None,
     # export the model to ONNX
     f = io.BytesIO()
     input_copy = copy.deepcopy(input)
+    print("=================== ONNX EXPORT ========================")
     torch.onnx._export(model, input_copy, f,
                        opset_version=opset_version,
                        example_outputs=example_outputs,
@@ -46,11 +52,12 @@ def convert_to_onnx(model, input=None, opset_version=9, example_outputs=None,
                        keep_initializers_as_inputs=keep_initializers_as_inputs,
                        dynamic_axes=dynamic_axes,
                        input_names=input_names, output_names=output_names,
-                       fixed_batch_size=fixed_batch_size, training=training,
-                       onnx_shape_inference=onnx_shape_inference,
-                       use_new_jit_passes=use_new_jit_passes)
+                       fixed_batch_size=fixed_batch_size)#, training=training,
+                       #onnx_shape_inference=onnx_shape_inference,
+                       #use_new_jit_passes=use_new_jit_passes)
 
     # compute onnxruntime output prediction
+    print("================ ORT SESSION ==================")
     ort_sess = onnxruntime.InferenceSession(f.getvalue())
     return ort_sess
 
@@ -92,10 +99,12 @@ def run_model_test(self, model, batch_size=2, state_dict=None,
         # In-place operators will update input tensor data as well.
         # Thus inputs are replicated before every forward call.
         input_copy = copy.deepcopy(input)
+        print("=================== TORCH RUN =====================")
         output = model(*input_copy)
+        print("end torch run")
         if isinstance(output, torch.Tensor):
             output = (output,)
-
+        print("================== CONVER to ONNX ======================")
         ort_sess = convert_to_onnx(model, input=input, opset_version=self.opset_version,
                                    example_outputs=output, do_constant_folding=do_constant_folding,
                                    keep_initializers_as_inputs=self.keep_initializers_as_inputs,
@@ -104,6 +113,7 @@ def run_model_test(self, model, batch_size=2, state_dict=None,
                                    onnx_shape_inference=self.onnx_shape_inference,
                                    use_new_jit_passes=self.use_new_jit_passes)
 
+        print("========================= ORT SESSION ======================")
         ort_outs = run_ort(ort_sess, input)
         ort_compare_with_pytorch(ort_outs, output, rtol, atol)
 
@@ -136,6 +146,7 @@ class TestONNXRuntime(unittest.TestCase):
             torch.cuda.manual_seed_all(0)
         np.random.seed(seed=0)
         self.is_script_test_enabled = True
+        self.use_new_jit_passes = True
 
     def run_test(self, model, input, rtol=1e-3, atol=1e-7, do_constant_folding=True,
                  batch_size=2, use_gpu=True, dynamic_axes=None, test_with_inputs=None,
@@ -837,6 +848,14 @@ class TestONNXRuntime(unittest.TestCase):
         x = torch.randn(2, 3)
         self.run_test(ArithmeticModule(), x)
 
+    def test_div_mod(self):
+        class Div(torch.nn.Module):
+            def forward(self, x):
+                #k = int(x.size(1) / 2)
+                return x.new_zeros(int(x.size(1) / int(2)))
+        x = torch.randn(1, 8, 27).to(torch.int)
+        self.run_test(Div(), (x,))
+
     def test_floor_div(self):
         class FloorDivModule(torch.nn.Module):
             def forward(self, x, y):
@@ -873,7 +892,7 @@ class TestONNXRuntime(unittest.TestCase):
     def test_div(self):
         class DivModule(torch.nn.Module):
             def forward(self, x, y):
-                return x / y
+                return int(x / 2) #y
 
         x = torch.randn(2, 3, 4).to(torch.int)
         y = torch.arange(1, 2 * 3 * 4 + 1).reshape(2, 3, 4).to(torch.int)
@@ -3367,7 +3386,7 @@ class TestONNXRuntime(unittest.TestCase):
                                     'output': [0]
                                     })
 
-    @disableScriptTest()
+    #@disableScriptTest()
     @skipIfUnsupportedMinOpsetVersion(10)
     def test_embedding_bag(self):
         model = torch.nn.EmbeddingBag(10, 5, mode='sum', scale_grad_by_freq=True)
@@ -3384,7 +3403,7 @@ class TestONNXRuntime(unittest.TestCase):
         input = torch.randint(10, (7, 5))
         self.run_test(model, (input))
 
-    @disableScriptTest()
+    #@disableScriptTest()
     @skipIfUnsupportedMinOpsetVersion(10)
     def test_embedding_bag_1d_per_sample_weights(self):
         class EmbeddingModel(torch.nn.Module):
@@ -3582,7 +3601,55 @@ class TestONNXRuntime(unittest.TestCase):
         self.assertEqual('Unsupported: ONNX export of Pad in opset 9. The sizes of the padding must be constant. ' +
                          'Please try opset version 11.', the_exception.args[0])
 
-    @disableScriptTest()
+    def test_uninit(self):
+        class Unfold(torch.nn.Module):
+            def forward(self, y):
+                if y.shape[1] < 5:
+                    if y.size(0) == 1:
+                        y = y + 4
+                    else:
+                        return y
+                # else:
+                #     y = y +2
+                return y
+        
+        x = torch.ones((3, 4), dtype=torch.int)
+        model = Unfold()
+        output= model(x)
+        script_model = torch.jit.script(model)
+        onnx_model_pbtxt = export_to_pbtxt(script_model, (x,), example_outputs=output)
+        print(onnx_model_pbtxt)
+        self.run_test(Unfold(), x, do_constant_folding=True)
+
+    def test_uninit2(self):
+        class Unfold(torch.nn.Module):
+            def forward(self, y):
+                for i in range(4):
+                    if (y.shape[1] == 1):
+                        y = y + 4
+                    else:
+                        return y
+                return y
+        x = torch.ones((3, 4), dtype=torch.int64)
+        self.run_test(Unfold(), x)
+
+    def test_uninit3(self):
+        class Unfold(torch.nn.Module):
+            def forward(self, y):
+                i = 0
+                while i < 5:
+                    if y.size(0) == 1:
+                        y = y + 4
+                    else:
+                        return y
+                    #y = torch.stack((y, y), dim=0)
+                    i = i + 1
+                return y
+
+        x = torch.ones((1, 4), dtype=torch.int)
+        self.run_test(Unfold(), x)
+
+    #@disableScriptTest()
     def test_reflection_pad(self):
         model = torch.nn.ReflectionPad1d(2)
         x = torch.randn(2, 4, 4)
