@@ -122,7 +122,7 @@ class TestONNXRuntime(unittest.TestCase):
     from torch.onnx.symbolic_helper import _export_onnx_opset_version
     opset_version = _export_onnx_opset_version
     keep_initializers_as_inputs = True  # For IR version 3 type export.
-    use_new_jit_passes = False  # For testing main code-path
+    use_new_jit_passes = True  # For testing main code-path
     onnx_shape_inference = False
 
     def setUp(self):
@@ -465,6 +465,7 @@ class TestONNXRuntime(unittest.TestCase):
     def test_none_as_input(self):
         class Model(torch.nn.Module):
             def forward(self, x, y):
+            # type: (Tensor, Optional[Tensor]) -> Tensor
                 if y is not None:
                     return x + y
                 return x
@@ -475,6 +476,7 @@ class TestONNXRuntime(unittest.TestCase):
     def test_none_as_tuple_input(self):
         class Model(torch.nn.Module):
             def forward(self, x, y):
+            # type: (Tensor, Optional[Tensor]) -> Tensor
                 if y[0] is not None:
                     return x + y[0]
                 if y[1] is not None:
@@ -488,6 +490,7 @@ class TestONNXRuntime(unittest.TestCase):
     def test_none_as_named_input(self):
         class Model(torch.nn.Module):
             def forward(self, x, y=None, z=None):
+            # type: (Tensor, Optional[Tensor], Optional[Tensor]) -> Tensor
                 if y is not None:
                     return x + y
                 if z is not None:

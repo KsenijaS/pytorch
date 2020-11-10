@@ -64,6 +64,9 @@ void flatten_rec(PyObject* obj, ParsedArgs& args) {
     args.desc.metadata.emplace_back(var);
     args.desc.structure.push_back(D::Variable);
   } else if (strcmp(THPUtils_typename(obj), "NoneType") == 0) {
+    auto t = at::Tensor();
+    printf("---------------------------- Tensor NONE ------------------------- \n");
+    args.vars.push_back(t);
     args.desc.structure.push_back(D::NoneType);
   } else {
     std::string msg =
