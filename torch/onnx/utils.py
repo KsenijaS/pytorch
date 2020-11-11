@@ -124,7 +124,7 @@ def _optimize_graph(graph, operator_export_type, _disable_torch_constant_prop=Fa
                     params_dict=None, use_new_jit_passes=False, dynamic_axes=None, input_names=None):
     # Inline everything
     torch._C._jit_pass_inline(graph)
-
+    print(graph)
     # Remove fork/wait nodes
     torch._C._jit_pass_inline_fork_wait(graph)
     torch._C._jit_pass_lint(graph)
@@ -222,6 +222,7 @@ def _optimize_graph(graph, operator_export_type, _disable_torch_constant_prop=Fa
     from torch.onnx.symbolic_helper import _onnx_shape_inference, _export_onnx_opset_version
     if _onnx_shape_inference:
         torch._C._jit_pass_onnx_graph_shape_type_inference(graph, _export_onnx_opset_version)
+    print(graph)
     return graph
 
 
@@ -364,6 +365,7 @@ def _create_jit_graph(model, args, _retain_param_name, use_new_jit_passes):
                 params = []
 
             in_vars, in_desc = torch.jit._flatten(tuple(args) + tuple(params))
+            print("in_vars", in_vars)
             graph = _propagate_and_assign_input_shapes(
                 method_graph, tuple(in_vars), False, False)
         except AttributeError as e:

@@ -461,7 +461,8 @@ static void setInputTensorTypes(Graph& g, const Stack& stack, bool complete) {
       AT_ASSERT(v->node()->kind() == prim::Param);
       v->setType(getTupleTensorType(s_iter, stack.end(), v->type(), complete));
     } else {
-      v->setType(getTensorType(s_iter->toTensor(), complete));
+      if (!s_iter[0].isNone())
+        v->setType(getTensorType(s_iter->toTensor(), complete));
       s_iter++;
     }
   }
@@ -480,7 +481,7 @@ static std::shared_ptr<Graph> _propagate_shapes(
 
 static std::shared_ptr<Graph> _propagate_and_assign_input_shapes(
     Graph& graph,
-    const std::vector<at::Tensor>& inputs,
+    const std::vector<optional<at::Tensor>>& inputs,
     bool with_grad = false,
     bool propagate = true) {
   auto retval = graph.copy();
