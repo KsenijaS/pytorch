@@ -220,9 +220,13 @@ static void EnsureNoTuples(Block* block) {
 }
 
 void LowerAllTuples(const std::shared_ptr<Graph>& graph) {
+  printf("============ Lower All Tuples ============== \n");
   LowerAllTuples(graph->block());
+  printf("================== DCE ================= \n");
   EliminateDeadCode(graph->block());
+  printf("=================== No Tuples =================== \n");
   EnsureNoTuples(graph->block());
+  printf("==================== END ====================== \n");
 }
 
 void LowerSimpleTuples(Block* block) {

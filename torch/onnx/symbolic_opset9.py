@@ -994,6 +994,7 @@ def wrap_logical_op_with_negation(func):
 
 
 def __isnot_(g, self, other):
+    print("------------------------- isnot ----------------------", self.type())
     if sym_help._is_none(other):
         if sym_help._is_none(self):
             return g.op("Constant", value_t=torch.BoolTensor([1]))

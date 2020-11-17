@@ -111,9 +111,10 @@ static c10::optional<c10::ScalarType> InferExpectedScalarType(const Node* n) {
           typesFromScalars.emplace_back(
               input->node()->t(attr::value).scalar_type());
         } else if (
-            auto scalar_type =
-                input->type()->cast<TensorType>()->scalarType()) {
-          typesFromTensors.emplace_back(*scalar_type);
+            auto tensor_type =
+                input->type()->cast<TensorType>()) {
+          if (tensor_type->scalarType())
+            typesFromTensors.emplace_back(*tensor_type->scalarType());
         }
       });
 
@@ -175,10 +176,10 @@ static void UpdateScalarTypeForInputs(
 
   for (auto input : n->inputs()) {
     auto input_tensor_type = input->type()->cast<TensorType>();
-    auto input_scalar_type = input_tensor_type->scalarType();
+    //auto input_scalar_type = input_tensor_type->scalarType();
 
     if ((input->node()->kind() == onnx::Constant) ||
-        (input_scalar_type && (*input_scalar_type != scalar_type))) {
+        (input_tensor_type && input_tensor_type->scalarType() && (*input_tensor_type->scalarType() != scalar_type))) {
       if (input->node()->kind() == onnx::Constant) {
         // Fix up the scalar directly instead of inserting a cast operator.
         // NOTE: Keep only the else branch once constant_folding is enabled by

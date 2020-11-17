@@ -52,8 +52,11 @@ def convert_to_onnx(model, input=None, opset_version=9, example_outputs=None,
 
 def run_ort(ort_sess, input):
     input_copy = copy.deepcopy(input)
+    print(input)
     input, _ = torch.jit._flatten(input_copy)
-    inputs = [to_numpy(inp) for inp in input]
+    print(input)
+    #inputs = [to_numpy(inp) for inp in input]
+    inputs = [to_numpy(input[0]), [to_numpy(input[1])]]# [to_numpy(input[2])]]
 
     ort_inputs = dict((ort_sess.get_inputs()[i].name, input) for i, input in enumerate(inputs))
     ort_outs = ort_sess.run(None, ort_inputs)
@@ -91,7 +94,7 @@ def run_model_test(self, model, batch_size=2, state_dict=None,
         output = model(*input_copy)
         if isinstance(output, torch.Tensor):
             output = (output,)
-
+        print(input)
         ort_sess = convert_to_onnx(model, input=input, opset_version=self.opset_version,
                                    example_outputs=output, do_constant_folding=do_constant_folding,
                                    keep_initializers_as_inputs=self.keep_initializers_as_inputs,
@@ -123,7 +126,7 @@ class TestONNXRuntime(unittest.TestCase):
     opset_version = _export_onnx_opset_version
     keep_initializers_as_inputs = True  # For IR version 3 type export.
     use_new_jit_passes = True  # For testing main code-path
-    onnx_shape_inference = False
+    onnx_shape_inference = True
 
     def setUp(self):
         torch.manual_seed(0)
@@ -467,11 +470,13 @@ class TestONNXRuntime(unittest.TestCase):
             def forward(self, x, y):
             # type: (Tensor, Optional[Tensor]) -> Tensor
                 if y is not None:
+                    print("------------------- y -------------------", y.size())
                     return x + y
                 return x
 
         x = torch.randn(2, 3)
-        self.run_test(Model(), (x, None))
+        y = torch.randn(2, 3)
+        self.run_test(Model(), (x, y))
 
     def test_none_as_tuple_input(self):
         class Model(torch.nn.Module):
@@ -498,8 +503,9 @@ class TestONNXRuntime(unittest.TestCase):
                 return x
 
         x = torch.randn(2, 3)
+        y = torch.randn(2, 3)
         z = torch.randn(2, 3)
-        self.run_test(Model(), (x, None, z))
+        self.run_test(Model(), (x, y, z))
 
     @skipIfUnsupportedMinOpsetVersion(9)
     def test_cste_script(self):
@@ -4163,7 +4169,7 @@ class TestONNXRuntime(unittest.TestCase):
         self.run_test(EinsumModelTranspose(), input=(x,))
 
     @skipIfUnsupportedMinOpsetVersion(12)
-    @disableScriptTest()  # shape/type inference
+    #@disableScriptTest()  # shape/type inference
     def test_crossentropyloss(self):
         for ignore_index in [-100, 1]:
             x = torch.randn(3, 5)

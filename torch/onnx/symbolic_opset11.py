@@ -270,6 +270,20 @@ def masked_scatter(g, self, mask, source):
                                     dynamic_slice=True)
     return g.op('ScatterND', self, index, source)
 
+def __isnot_(g, self, other):
+    # if _is_tensor_list(self):
+    #     return g.op("Constant", value_t=torch.BoolTensor([1]))
+    #      #return g.op("SequenceLength", self)
+    print("============================= ISNOT =======================================")
+    if sym_help._is_none(other):
+        if sym_help._is_none(self):
+            return g.op("Constant", value_t=torch.BoolTensor([0]))
+        return g.op("Constant", value_t=torch.BoolTensor([1]))
+    return ne(g, self, other)
+
+def prim_unchecked_cast(g, self):
+    print("====================================== CAST ====================================")
+    return g.op("SequenceAt", self, g.op("Constant", value_t=torch.tensor([0], dtype=torch.long)))
 
 def _len(g, self):
     if _is_tensor_list(self) or self.node().kind() == "onnx::SplitToSequence":
@@ -280,6 +294,7 @@ def _len(g, self):
 def __getitem_(g, self, i):
     if sym_help._is_tensor_list(self):
         # SequenceAt requires that the input be a List of Tensors
+        print("---------------- sequence at ----------------------")
         return g.op("SequenceAt", self, i)
     else:
         from torch.onnx.symbolic_opset9 import __getitem_ as getitem

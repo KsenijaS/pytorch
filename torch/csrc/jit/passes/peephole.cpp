@@ -209,7 +209,7 @@ struct PeepholeOptimizeImpl {
           }
         }
       } else if (
-          node->kind() == aten::__is__ || node->kind() == aten::__isnot__) {
+          node->kind() == aten::__is__) { //|| node->kind() == aten::__isnot__) {
         // if we are comparing a None value with a value that can't be None
         // replace the output with true if node is __isnot__ or false if node is
         // __is__

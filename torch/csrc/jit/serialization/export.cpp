@@ -920,6 +920,13 @@ void check_onnx_proto(const std::string& proto_string) {
     throw std::runtime_error("Invalid ONNX proto string.");
     return;
   }
+  printf("============================== MODEL ==================================== \n");
+  std::string bytes = "";
+  model.SerializeToString(&bytes);
+  std::ofstream out;
+  out.open("no_model.onnx");
+  out << bytes;
+  out.close();
   onnx::checker::check_model(model);
 }
 

@@ -461,8 +461,20 @@ static void setInputTensorTypes(Graph& g, const Stack& stack, bool complete) {
       AT_ASSERT(v->node()->kind() == prim::Param);
       v->setType(getTupleTensorType(s_iter, stack.end(), v->type(), complete));
     } else {
-      if (!s_iter[0].isNone())
+      std::cout << "s_iter " << v->type()->cast<OptionalType>() << std::endl;
+      c10::optional<at::ScalarType> scalar_type = c10::nullopt;
+      scalar_type = at::kFloat;
+      auto v_type = TensorType::create(
+            scalar_type.value(),
+            at::kCPU,
+            c10::SymbolicShape(),
+            c10::VaryingShape<c10::Stride>{},
+            {});
+      if (v->type()->cast<OptionalType>()) {
+        v->setType(ListType::create(v_type));
+      } else {
         v->setType(getTensorType(s_iter->toTensor(), complete));
+      }
       s_iter++;
     }
   }

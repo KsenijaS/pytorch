@@ -24,7 +24,7 @@ static void EraseNumberTypesOnBlock(Block* block) {
             it->output()->type()->isSubtypeOf(BoolType::get())) {
           at::Scalar s;
           if (it->output()->type()->isSubtypeOf(BoolType::get())) {
-            s = static_cast<int64_t>(*constant_as<bool>(it->output()));
+            s = *constant_as<bool>(it->output());
           } else {
             s = *constant_as<at::Scalar>(it->output());
           }
