@@ -377,6 +377,7 @@ def _scatter_helper(g, self, dim, index, src):
 
 
 def _arange_cast_helper(g, end, start=None, step=None, dtype=None):
+    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! CAST HELPER!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     def _is_all_integral(scalars):
         for scalar in scalars:
             try:
@@ -397,10 +398,13 @@ def _arange_cast_helper(g, end, start=None, step=None, dtype=None):
             type = scalar_type_to_pytorch_type.index(torch.get_default_dtype())
     else:
         type = dtype
-
+    print("!!!!!!!!!!!!!!!!!!!!!!!!! START !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", start)
+    print("!!!!!!!!!!!!!!!!!!!!!!!!! END !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", end)
+    print("!!!!!!!!!!!!!!!!!!!!!!!!!!! STEP !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", step)
     start = g.op("Cast", start, to_i=scalar_type_to_onnx[type]) if start else None
-    end = g.op("Cast", end, to_i=scalar_type_to_onnx[type]) if end else None
+    #end = g.op("Cast", end, to_i=scalar_type_to_onnx[type]) if end else None
     step = g.op("Cast", step, to_i=scalar_type_to_onnx[type]) if step else None
+    print("!!!!!!!!!!!!!!!!!!!!!! RETURN !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     return type, end, start, step
 
 

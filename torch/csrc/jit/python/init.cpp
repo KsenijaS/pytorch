@@ -39,6 +39,7 @@
 #include <torch/csrc/jit/passes/onnx/eval_peephole.h>
 #include <torch/csrc/jit/passes/onnx/fixup_onnx_controlflow.h>
 #include <torch/csrc/jit/passes/onnx/function_substitution.h>
+#include <torch/csrc/jit/passes/onnx/fold_if_node.h>
 #include <torch/csrc/jit/passes/onnx/pattern_conversion/pattern_conversion.h>
 #include <torch/csrc/jit/passes/onnx/pattern_conversion/pattern_encapsulation.h>
 #include <torch/csrc/jit/passes/onnx/peephole.h>
@@ -152,6 +153,11 @@ void initJITBindings(PyObject* module) {
           })
       .def("_jit_pass_lower_all_tuples", LowerAllTuples)
       .def("_jit_pass_onnx_function_substitution", ONNXFunctionCallSubstitution)
+      .def(
+          "_jit_pass_onnx_fold_if",
+          [](std::shared_ptr<Graph>& graph, bool dynamic_axes) {
+            return FoldIfONNX(graph->block(), dynamic_axes);
+          })
       .def(
           "_jit_pass_onnx_peephole",
           [](std::shared_ptr<Graph>& graph,

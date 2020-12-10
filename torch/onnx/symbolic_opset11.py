@@ -259,6 +259,7 @@ def __interpolate(g, input, size, scale_factor, mode, align_corners, recompute_s
 
 @parse_args('v', 'i', 'v', 'v')
 def gather(g, self, dim, index, sparse_grad=False):
+    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! GATHER !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     if sym_help._maybe_get_const(sparse_grad, 'i'):
         return _unimplemented("gather", "sparse_grad == True")
     if sym_help._operator_export_type == torch.onnx.OperatorExportTypes.ONNX_ATEN_FALLBACK:
@@ -529,6 +530,7 @@ def logdet(g, input):
 
 
 def arange(g, *args):
+    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ARANGE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     def _get_arange_dtype(dtype):
         dtype = sym_help._maybe_get_const(dtype, 'i')
         return dtype
@@ -552,7 +554,9 @@ def arange(g, *args):
             # aten::arange(Scalar start, Scalar end, Scalar step, ScalarType dtype, Layout, Device, bool pin_memory)
             dtype = _get_arange_dtype(args[3])
         type, end, start, step = sym_help._arange_cast_helper(g, start=args[0], end=args[1], step=args[2], dtype=dtype)
+        print("!!!!!!!! CAST HELPER!!!!!!!!!!!!!!!!!!!!")
         arange_tensor = g.op("Range", start, end, step)
+        print("!!!!!!!!!!! arange tensor !!!!!!!!!!!!!!!")
     elif len(args) == 6:
         # aten::arange(Scalar start, Scalar end, ScalarType dtype, Layout, Device, bool pin_memory)
         dtype = _get_arange_dtype(args[2])

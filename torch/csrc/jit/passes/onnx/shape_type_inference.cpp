@@ -4,6 +4,7 @@
 #include <torch/csrc/jit/passes/utils/onnx_utils.h>
 #include <torch/csrc/jit/serialization/export.h>
 #include <torch/csrc/jit/serialization/onnx.h>
+#include <torch/csrc/jit/passes/onnx/fold_if_node.h>
 
 #include <onnx/shape_inference/implementation.h>
 
@@ -338,9 +339,31 @@ void ConvertGraphToONNXProto(
   }
 }
 
+bool checkOutputType(Node* n) {
+  auto then_block = n->blocks()[0];
+  auto else_block = n->blocks()[1];
+  for (size_t i = 0; i < n->outputs().size(); i++) {
+    // check the type
+    if (then_block->outputs()[i]->type()->cast<TensorType>()->scalarType() != else_block->outputs()[i]->type()->cast<TensorType>()->scalarType()) {
+      return false;
+    }
+  }
+  return true;
+}
 // Any additional post process that are specific to individual node kind.
 void SpecialPostProcess(Node* n) {
   switch (n->kind()) {
+    case ::c10::onnx::If: {
+      if (!checkOutputType(n) && CheckFoldONNX(n)) {
+        auto cond = FoldConditionONNX(n);
+        int condition = 1 - (int)cond;
+        std::cout << " ----------------------- CONDITION ---------------------------  " << cond << std::endl;
+        for (size_t i = 0; i < n->outputs().size() ; i++) {
+          n->outputs()[i]->setType(n->blocks()[condition]->outputs()[i]->type());
+        }
+      }
+      break;
+    }
     case ::c10::onnx::SequenceInsert: {
       // Special case when input sequence to SequenceInsert is empty.
       // onnx Sequence type requires element type to be set.
@@ -407,7 +430,6 @@ void ONNXShapeTypeInference(
   auto n_graph = std::make_shared<Graph>();
   auto clone_node = CloneNodeToGraph(n, n_graph, params_dict);
   n_graph->insertNode(clone_node);
-
   // Register all node outputs as graph outputs.
   for (auto output : clone_node->outputs()) {
     n_graph->registerOutput(output);
@@ -419,6 +441,12 @@ void ONNXShapeTypeInference(
   GRAPH_DEBUG(
       "Cloned torch graph to run shape inference: ", n_graph->toString());
 
+  // if (n->kind() == ::c10::onnx::If) {
+  //   for (size_t i = 0; i < n->outputs().size() ; i++) {
+  //     std::cout << " debug name " << n->outputs()[i]->debugName() << std::endl;
+  //     n->outputs()[i]->setType(n->blocks()[1]->outputs()[i]->type());
+  //   }
+  // }
   if (IsGraphValidForInference(n_graph)) {
     // TODO: Some ops have conversion happen at Peephole pass.
     //       The conversion here is incomplete for these ops.
@@ -446,7 +474,8 @@ void ONNXShapeTypeInference(
     GRAPH_DEBUG(
         "ONNX graph after shape inference: ", prettyPrint(*model_proto));
   }
-
+  ScalarTypeAnalysisForONNX(n_graph);
+  // std::cout << "graph   " << n_graph->toString() << std::endl;
   SpecialPostProcess(n);
   GRAPH_DEBUG(
       "Torch graph after shape inference:", n->owningGraph()->toString());
@@ -517,6 +546,8 @@ void ONNXShapeTypeInference(
     const ParamMap& params_dict,
     int opset_version) {
   for (auto n : graph->nodes()) {
+    // ScalarTypeAnalysisForONNX(graph);
+    //std::cout << "------- new graph -----------  " << graph->toString() << std::endl;
     ONNXShapeTypeInference(n, params_dict, opset_version);
   }
 }

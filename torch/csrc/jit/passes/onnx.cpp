@@ -176,7 +176,7 @@ void BlockToONNX(
     std::unordered_map<Value*, Value*> env) {
   torch::autograd::SymbolicContext ctx{};
   ctx.block = new_block;
-
+  //printf("-------------------------- BLOCK TO ONNX ----------------------------- \n");
   GRAPH_DEBUG(
       "BlockToONNX: graph of old block: ",
       old_block->owningGraph()->toString());
@@ -185,16 +185,24 @@ void BlockToONNX(
   for (auto input : old_block->inputs()) {
     auto n = ctx.block->addInput()->copyMetadata(input);
     env[input] = n;
+    //std::cout << "========= env input ============= " << n->debugName() << std::endl;
   }
 
   // Finally, visit all nodes in the graph
   for (auto node : old_block->nodes()) {
+    //std::cout << " -------------- node ----------------  " << node->output()->debugName() << std::endl;
+    //if (node->output()->debugName() != "y.4")
     NodeToONNX(node, ctx.block, operator_export_type, env);
   }
   for (auto output : old_block->outputs()) {
+    //std::cout << "-------- old block outputs --------" << output->debugName() << std::endl;
+    //if (output->debugName() != "y.4") {
+    //std::cout << "-------- old block outputs --------" << output->debugName() << std::endl;
     ctx.block->registerOutput(env.at(output));
+    //printf("----------------------- register output ----------------------- \n");
+    //}
   }
-
+  //printf("======================= RUN DCE ======================== \n");
   // Run dce to clean-up unused functional and inplace ops.
   EliminateDeadCode(
       ctx.block,
@@ -216,6 +224,7 @@ void NodeToONNX(
   // Returns a node that n maps to in the new graph
   auto envFn = [&env](Value* n) -> Value* {
     auto it = env.find(n);
+    //std::cout << " ============== MAPPING ==============   " << n->debugName() << "   it->first   " << it->first->debugName() << "    it->second   " << it->second->debugName() << std::endl;
     TORCH_CHECK(it != env.end(), "Dangling node reference");
     TORCH_CHECK(it->second, "Unused node was subsequently used");
     return it->second;
@@ -253,6 +262,7 @@ void NodeToONNX(
         outputs[i]->node()->setSourceRange(node->sourceRange());
         outputs[i]->node()->setScope(node->scope());
         env[old] = outputs[i];
+        // std::cout << "      outputs     " << old->debugName() << "   " << outputs[i]->debugName() << std::endl; 
       } else {
         // Null output means that the ONNX op doesn't have outputs corresponding
         // to certain PyTorch outputs
@@ -272,10 +282,12 @@ void NodeToONNX(
 
   // Clone the node and add it to the new graph
   auto cloneNode = [&](Node* node) {
+    //printf("===================== Cloned Node ========================= \n");
     auto n_ = new_block->appendNode(
         new_block->owningGraph()->createClone(node, envFn));
     for (size_t i = 0; i < node->outputs().size(); i++) {
       // n_->outputs()[i]->setType(node->outputs()[i]->type());
+      //printf(" ========================== Cloned outputs ===================== \n");
       env[node->output(i)] = n_->output(i);
     }
   };
@@ -304,6 +316,7 @@ void NodeToONNX(
       throw std::runtime_error(ss.str());
     }
 
+    //if (op_name != "If")
     setOutputs(op_name, n, outputs);
   };
 
@@ -314,6 +327,7 @@ void NodeToONNX(
     py::tuple py_inputs(n->inputs().size());
     Py_ssize_t input_nr = 0;
     for (auto* input : n->inputs()) {
+      //std::cout << " ========== debug name ============  " << input->debugName() << " ======= output ======== " << n->output()->debugName() << std::endl;
       py_inputs[input_nr++] = py::cast(envFn(input));
     }
 

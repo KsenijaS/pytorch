@@ -509,6 +509,22 @@ def view_as(g, self, other):
     return g.op("Reshape", self, shape)
 
 
+def __isnot_(g, self, other):
+    if sym_help._is_none(other):
+        if sym_help._is_none(self):
+            return g.op("Constant", value_t=torch.BoolTensor([0]))
+        return g.op("Constant", value_t=torch.BoolTensor([1]))
+    return ne(g, self, other)
+
+
+# exists to refine the type of the Value
+# if x is an optional Tensor, unchecked_cast will cast
+# x to Tensor, so the rest of the graph knows that x is a Tensor
+# this doesn't do anything in runtime and is a noop in ONNX
+def prim_unchecked_cast(g, self):
+    return self
+
+
 def prim_ConstantSplit(g, self, split_size, dim):
     size = self.type().sizes()[dim]
     splits = [split_size] * (size // split_size)
@@ -1294,8 +1310,10 @@ def instance_norm(g, input, weight, bias, running_mean, running_var, use_input_s
     return g.op("InstanceNormalization", input, weight, bias, epsilon_f=eps)
 
 
-@parse_args('v', 'i', 'i', 'i')
+#@parse_args('v', 'i', 'i', 'i')
 def unfold(g, input, dimension, size, step):
+    dimension = sym_help._get_const(dimension, 'i', 'dimension')
+    step = sym_help._get_const(step, 'i', 'step')
     if sym_help._operator_export_type == torch.onnx.OperatorExportTypes.ONNX_ATEN_FALLBACK:
         return g.op("ATen", input, operator_s="unfold", dimension_i=dimension, size_i=size, step_i=step)
     if input.isCompleteTensor():
@@ -2255,7 +2273,10 @@ def is_floating_point(g, self):
 
 
 def prim_dtype(g, self):
+    print(self)
     dtype = sym_help._try_get_scalar_type(self)
+    if dtype is None:
+        dtype = "Long"
     dtype = sym_help.scalar_type_to_onnx.index(sym_help.cast_pytorch_to_onnx[dtype])
     return g.op("Constant", value_t=torch.IntTensor([dtype]))
 

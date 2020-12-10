@@ -40,7 +40,7 @@ def convert_to_onnx(model, input=None, opset_version=9, example_outputs=None,
                        example_outputs=example_outputs,
                        do_constant_folding=do_constant_folding,
                        keep_initializers_as_inputs=keep_initializers_as_inputs,
-                       dynamic_axes=dynamic_axes,
+                       dynamic_axes=dynamic_axes, verbose=True,
                        input_names=input_names, output_names=output_names,
                        fixed_batch_size=fixed_batch_size, training=training,
                        onnx_shape_inference=onnx_shape_inference,
@@ -122,7 +122,7 @@ class TestONNXRuntime(unittest.TestCase):
     from torch.onnx.symbolic_helper import _export_onnx_opset_version
     opset_version = _export_onnx_opset_version
     keep_initializers_as_inputs = True  # For IR version 3 type export.
-    use_new_jit_passes = False  # For testing main code-path
+    use_new_jit_passes = True  # For testing main code-path
     onnx_shape_inference = True
 
     def setUp(self):
@@ -1311,17 +1311,59 @@ class TestONNXRuntime(unittest.TestCase):
         m1 = torch.randn(3, 4, 5, 6, 7)
         self.run_test(MyModel(), (m1,))
 
+
+    def test_if_fold(self):
+        class IfFoldModel(torch.nn.Module):
+            def forward(self, y):
+                if y.dim() == 2:
+                    y = y + 2
+                else:
+                    y = y - 1
+                
+                y = y + 1
+                return y
+
+        x = torch.ones((3, 4), dtype=torch.int)
+        self.run_test(IfFoldModel(), x)
+
+
+    def test_tensor_index_advanced_indexing2(self):
         class MyModel(torch.nn.Module):
             def forward(self, input):
-                return input[:, torch.tensor([0, 2]), None, 2:4, torch.tensor([[1, 3], [4, 0]])]
+                d1 = input.shape[0]
+                b = 4 // 2
+                di = d1-4
+                frame = torch.arange(0, 8820).unfold(di, b, d1)
+                return frame
 
+        m1 = torch.randn(4, 5, 6, 7)
         self.run_test(MyModel(), (m1,))
 
+
+    def test_next_empty(self):
         class MyModel(torch.nn.Module):
-            def forward(self, input):
-                return input[:, torch.tensor([0, 2]), torch.tensor([1]), 2:4, torch.tensor([[1], [4]])]
+            def forward(self, x):
+                d = x.shape[0]
+                p = d // 2
+                y = torch.empty(p, dtype=torch.long)
+                return y
 
+        m1 = torch.randn(4, 5, 6, 7)
         self.run_test(MyModel(), (m1,))
+
+
+
+        # class MyModel(torch.nn.Module):
+        #     def forward(self, input):
+        #         return input[:, torch.tensor([0, 2]), None, 2:4, torch.tensor([[1, 3], [4, 0]])]
+
+        # self.run_test(MyModel(), (m1,))
+
+        # class MyModel(torch.nn.Module):
+        #     def forward(self, input):
+        #         return input[:, torch.tensor([0, 2]), torch.tensor([1]), 2:4, torch.tensor([[1], [4]])]
+
+        # self.run_test(MyModel(), (m1,))
 
     def test_tensor_index_advanced_indexing_consecutive(self):
         class MyModel(torch.nn.Module):
@@ -2098,7 +2140,8 @@ class TestONNXRuntime(unittest.TestCase):
     def test_narrow(self):
         class NarrowModel(torch.nn.Module):
             def forward(self, input):
-                return torch.narrow(input, 0, 0, 2)
+                d = input.shape[0] - 3
+                return torch.narrow(input, d, 0, 2)
 
         x = torch.randn(3, 3, requires_grad=True)
         self.run_test(NarrowModel(), x)
@@ -3060,7 +3103,8 @@ class TestONNXRuntime(unittest.TestCase):
     def test_flatten2d(self):
         class FlattenModel(torch.nn.Module):
             def forward(self, input):
-                return torch.flatten(input, 1)
+                d = input.shape[0] // 10
+                return torch.flatten(input, d)
 
         x = torch.randint(10, (1, 2, 3, 4))
         self.run_test(FlattenModel(), x)
@@ -3893,7 +3937,7 @@ class TestONNXRuntime(unittest.TestCase):
         x = torch.tensor([False, True, True])
         self.run_test(model, x)
 
-    @disableScriptTest()  # error in propagate as assign input shape
+    #@disableScriptTest()  # error in propagate as assign input shape
     @skipIfUnsupportedMinOpsetVersion(10)
     @skipIfUnsupportedOpsetVersion([12])  # Due to ONNX Loop shape inference issue
     def test_embedding_bag(self):
@@ -3911,7 +3955,7 @@ class TestONNXRuntime(unittest.TestCase):
         input = torch.randint(10, (7, 5))
         self.run_test(model, (input))
 
-    @disableScriptTest()  # scripting prim::Uninitialized, prim::dtype, prim::unchecked_cast
+    #@disableScriptTest()  # scripting prim::Uninitialized, prim::dtype, prim::unchecked_cast
     @skipIfUnsupportedMinOpsetVersion(10)
     @skipIfUnsupportedOpsetVersion([12])  # Due to ONNX Loop shape inference issue
     def test_embedding_bag_1d_per_sample_weights(self):
@@ -3927,7 +3971,7 @@ class TestONNXRuntime(unittest.TestCase):
         embedding_matrix = torch.rand(10, 15)
         self.run_test(model, (embedding_matrix, x, offset, w))
 
-    @disableScriptTest()  # scripting prim::Uninitialized, prim::dtype, prim::unchecked_cast
+    #@disableScriptTest()  # scripting prim::Uninitialized, prim::dtype, prim::unchecked_cast
     @skipIfUnsupportedMinOpsetVersion(10)
     @skipIfUnsupportedOpsetVersion([12])  # Due to ONNX Loop shape inference issue
     def test_embedding_bag_2d_per_sample_weights(self):
@@ -3938,8 +3982,8 @@ class TestONNXRuntime(unittest.TestCase):
 
         embedding_matrix = torch.rand(10, 15)
         model = EmbeddingModel()
-        x = torch.randint(7, (2, 3))
-        w = torch.randn(2, 3)
+        x = torch.randint(7, (4, 2))
+        w = torch.randn(4, 2)
         self.run_test(model, (embedding_matrix, x, w))
 
     @disableScriptTest()  # scripting prim::Uninitialized, prim::dtype, prim::unchecked_cast
@@ -4486,7 +4530,7 @@ class TestONNXRuntime(unittest.TestCase):
         self.run_test(KLDivLossMiniBatchMean(), input=(x, y))
 
     @skipIfUnsupportedMinOpsetVersion(12)
-    @disableScriptTest()  # shape/type inference
+    #@disableScriptTest()  # shape/type inference
     def test_nllloss(self):
         class NLLModel(torch.nn.Module):
             def __init__(self):

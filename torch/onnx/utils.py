@@ -125,7 +125,7 @@ def _optimize_graph(graph, operator_export_type, _disable_torch_constant_prop=Fa
                     params_dict=None, use_new_jit_passes=False, dynamic_axes=None, input_names=None):
     # Inline everything
     torch._C._jit_pass_inline(graph)
-
+    print(graph)
     # Remove fork/wait nodes
     torch._C._jit_pass_inline_fork_wait(graph)
     torch._C._jit_pass_lint(graph)
@@ -202,13 +202,20 @@ def _optimize_graph(graph, operator_export_type, _disable_torch_constant_prop=Fa
             input_names = [] if input_names is None else input_names
             dynamic_axes = {} if dynamic_axes is None else dynamic_axes
             torch._C._jit_pass_onnx_set_dynamic_input_shape(graph, dynamic_axes, input_names)
+        #print("pre onnx pass ", graph) 
         graph = torch._C._jit_pass_onnx(graph, operator_export_type)
+        print(graph)
         torch._C._jit_pass_lint(graph)
 
         torch._C._jit_pass_onnx_scalar_type_analysis(graph)
+        #print(graph)
         torch._C._jit_pass_lint(graph)
 
+        dynamic_fold = (dynamic_axes != {})
+        torch._C._jit_pass_onnx_fold_if(graph, dynamic_fold)
         from torch.onnx.symbolic_helper import _export_onnx_opset_version
+        if _onnx_shape_inference:
+            torch._C._jit_pass_onnx_graph_shape_type_inference(graph, params_dict, _export_onnx_opset_version)
         torch._C._jit_pass_onnx_peephole(graph, _export_onnx_opset_version, fixed_batch_size)
         torch._C._jit_pass_lint(graph)
 
@@ -224,6 +231,7 @@ def _optimize_graph(graph, operator_export_type, _disable_torch_constant_prop=Fa
     from torch.onnx.symbolic_helper import _onnx_shape_inference, _export_onnx_opset_version
     if _onnx_shape_inference:
         torch._C._jit_pass_onnx_graph_shape_type_inference(graph, params_dict, _export_onnx_opset_version)
+    #print(graph)
     return graph
 
 
@@ -900,6 +908,7 @@ def _find_symbolic_in_registry(domain, op_name, opset_version, operator_export_t
 def _run_symbolic_function(g, new_block, n, inputs, env, operator_export_type=OperatorExportTypes.ONNX):
     # NB: Returning None means the node gets cloned as is into
     # the new graph
+    #print("------------------- env ------------------------", env)
     try:
         import torch
         from torch.onnx.symbolic_helper import _export_onnx_opset_version as opset_version
@@ -939,6 +948,7 @@ def _run_symbolic_function(g, new_block, n, inputs, env, operator_export_type=Op
                 return _graph_at(g, op_name, *inputs, aten=True, **attrs)
             else:
                 # Export it regularly
+                #print(g)
                 domain = ''
                 symbolic_fn = _find_symbolic_in_registry(domain, op_name, opset_version, operator_export_type)
                 if symbolic_fn is None:
@@ -972,6 +982,10 @@ def _run_symbolic_function(g, new_block, n, inputs, env, operator_export_type=Op
             elif op_name == 'Loop' or op_name == 'If':
                 new_op_outputs = g.op(op_name, *inputs, outputs=n.outputsSize())
                 new_node = new_op_outputs[0].node() if n.outputsSize() > 1 else new_op_outputs.node()
+                #helper_b = None
+                # for b in n.blocks():
+                #     helper_b =b
+                #     break
                 for b in n.blocks():
                     new_block = new_node.addBlock()
                     # Copy input metadata to subblock
@@ -993,10 +1007,14 @@ def _run_symbolic_function(g, new_block, n, inputs, env, operator_export_type=Op
                         if i > 0 and (i + 1) < len(inputs):
                             b_in.setType(inputs[i + 1].type())
                     torch._C._jit_pass_onnx_block(b, new_block, operator_export_type, env)
-                new_op_outputs = torch._C._jit_pass_fixup_onnx_controlflow_node(new_node, opset_version)
+
+                #print(env)
+                new_op_outputs = torch._C._jit_pass_fixup_onnx_controlflow_node(new_node, opset_version) #[*new_block.outputs()]#
                 # Process Loop and If after subblock is converted.
+                #print("pre shape inference ", g)
                 from torch.onnx.symbolic_helper import _onnx_shape_inference
                 if _onnx_shape_inference:
+                    #print("pre onnx_shape_type_inference   ", g)
                     torch._C._jit_pass_onnx_node_shape_type_inference(new_node, _params_dict, opset_version)
                 return new_op_outputs
             else:
