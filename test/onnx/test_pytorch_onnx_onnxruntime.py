@@ -29,6 +29,18 @@ from torchvision.models.detection.rpn import AnchorGenerator, RPNHead, RegionPro
 from torchvision.models.detection.roi_heads import RoIHeads
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor, TwoMLPHead
 from collections import OrderedDict
+from typing import NamedTuple
+from torch import Tensor
+
+EncoderOut = NamedTuple(
+    "EncoderOut",
+    [
+        ("encoder_out", Tensor),  # T x B x C
+        ("encoder_padding_mask", Tensor),  # B x T
+        ("encoder_embedding", Tensor),  # B x T x C
+        ("encoder_states", Optional[List[Tensor]]),  # List[T x B x C]
+    ],
+)
 
 def to_numpy(tensor):
     if tensor.requires_grad:
@@ -279,11 +291,45 @@ class TestONNXRuntime(unittest.TestCase):
                 ort_sess_opt.graph_optimization_level = \
                     onnxruntime.GraphOptimizationLevel.ORT_ENABLE_EXTENDED if ort_optim_on else \
                     onnxruntime.GraphOptimizationLevel.ORT_DISABLE_ALL
-                ort_sess = onnxruntime.InferenceSession(model_file_name, sess_options=ort_sess_opt)
+                ort_sess = onnxruntime.InferenceSession(model_file_name, sess_options=ort_sess_opt) 
                 input_copy = copy.deepcopy(input)
                 ort_outs = run_ort(ort_sess, input_copy)
                 ort_compare_with_pytorch(ort_outs, output, rtol, atol)
 
+
+    #@disableScriptTest()
+    def test_encoder(self):
+        class TransformerEncoder(torch.nn.Module):
+            def forward(
+                self,
+                src_tokens,
+                src_lengths,
+                return_all_hiddens=torch.tensor([True])
+            ):
+                x = src_tokens
+                encoder_embedding = src_tokens
+                encoder_padding_mask = src_lengths
+                # B x T x C -> T x B x C
+                x = x.transpose(0, 1)
+                #return_all_hiddens=True
+                encoder_states = [] if return_all_hiddens else None
+        
+                if return_all_hiddens:
+                    assert encoder_states is not None
+                    encoder_states.append(x)
+
+                return EncoderOut(
+                    encoder_out=x,  # T x B x C
+                    encoder_padding_mask=encoder_padding_mask,  # B x T
+                    encoder_embedding=encoder_embedding,  # B x T x C
+                    encoder_states=encoder_states,  # List[T x B x C]
+                )
+        
+        model = TransformerEncoder()
+        x = torch.randn(2, 3, 4)
+        y = torch.randn(2, 3)
+        #z = torch.tensor(1, dtype=torch.bool)
+        self.run_test(model, (x, y))
 
     @skipIfUnsupportedMinOpsetVersion(9)  # Because external data format was released with Opset 9.
     def test_embedding_model_with_external_data(self):
