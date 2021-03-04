@@ -304,18 +304,17 @@ class TestONNXRuntime(unittest.TestCase):
                 self,
                 src_tokens,
                 src_lengths,
-                return_all_hiddens=torch.tensor([True])
+                #return_all_hiddens #=torch.tensor([True])
             ):
                 x = src_tokens
                 encoder_embedding = src_tokens
                 encoder_padding_mask = src_lengths
                 # B x T x C -> T x B x C
                 x = x.transpose(0, 1)
-                #return_all_hiddens=True
+                return_all_hiddens=False
                 encoder_states = [] if return_all_hiddens else None
         
-                if return_all_hiddens:
-                    assert encoder_states is not None
+                if return_all_hiddens and encoder_states is not None:
                     encoder_states.append(x)
 
                 return EncoderOut(
@@ -328,7 +327,7 @@ class TestONNXRuntime(unittest.TestCase):
         model = TransformerEncoder()
         x = torch.randn(2, 3, 4)
         y = torch.randn(2, 3)
-        #z = torch.tensor(1, dtype=torch.bool)
+        z = torch.tensor([True])
         self.run_test(model, (x, y))
 
     @skipIfUnsupportedMinOpsetVersion(9)  # Because external data format was released with Opset 9.
